@@ -12,17 +12,16 @@ function App() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/search", {
+      // const res = await fetch("http://localhost:8000/search", {
+      const res = await fetch("/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, limit: 10 }),
       });
-      if (!res.ok) {
-        throw new Error(`HTTP error! ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) setRecipes(data);
-      else setError(data.error || "Something went wrong");
+      else setError(data.error || "Unexpected response");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -33,12 +32,12 @@ function App() {
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>🥗 Better Recipes Finder</h1>
-      <div style={styles.inputArea}>
+
+      <div style={styles.control}>
         <textarea
           style={styles.textarea}
           rows={3}
-          placeholder="Type what you're craving... 
-For example: 'Show me high-protein vegetarian dinner under 30 minutes with lentils'"
+          placeholder="Describe your meal — e.g. 'Low-fat high-protein breakfast under 30 minutes with eggs'"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
@@ -50,8 +49,8 @@ For example: 'Show me high-protein vegetarian dinner under 30 minutes with lenti
       {error && <p style={styles.error}>⚠️ {error}</p>}
 
       <div style={styles.results}>
-        {recipes.map((r, idx) => (
-          <div key={idx} style={styles.card}>
+        {recipes.map((r, i) => (
+          <div key={i} style={styles.card}>
             {r.image && (
               <img
                 src={r.image}
@@ -62,18 +61,34 @@ For example: 'Show me high-protein vegetarian dinner under 30 minutes with lenti
             )}
             <h3>{r.name}</h3>
             <p><strong>Time:</strong> {r.time} mins</p>
-            <p><strong>Calories:</strong> {r.nutrition?.calories} kcal</p>
-            <p><strong>Protein:</strong> {r.nutrition?.protein} g</p>
+
+            <div style={styles.nutrition}>
+              <h4>Nutrition</h4>
+              <table style={styles.nutritionTable}>
+                <tbody>
+                  {Object.entries(r.nutrition || {}).map(([k, v]) => (
+                    v ? (
+                      <tr key={k}>
+                        <td style={styles.nutKey}>{formatKey(k)}</td>
+                        <td>{v}</td>
+                      </tr>
+                    ) : null
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
             <p style={styles.subheading}>Ingredients:</p>
             <ul>
-              {r.ingredients && r.ingredients.slice(0, 6).map((ing, i) => (
-                <li key={i}>{ing}</li>
+              {r.ingredients?.slice(0, 6).map((ing, idx) => (
+                <li key={idx}>{ing}</li>
               ))}
             </ul>
-            <p style={styles.subheading}>Directions (first steps):</p>
+
+            <p style={styles.subheading}>Directions:</p>
             <ol>
-              {r.directions && r.directions.slice(0, 3).map((step, i) => (
-                <li key={i}>{step}</li>
+              {r.directions?.slice(0, 3).map((step, idx) => (
+                <li key={idx}>{step}</li>
               ))}
             </ol>
           </div>
@@ -83,17 +98,24 @@ For example: 'Show me high-protein vegetarian dinner under 30 minutes with lenti
   );
 }
 
+// --- Helper for display formatting ---
+function formatKey(str) {
+  return str
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// --- Styles ---
 const styles = {
   container: {
     fontFamily: "Arial, sans-serif",
     padding: "20px",
-    background: "#fdfdfd",
+    background: "#f8f9fa",
   },
   title: {
     textAlign: "center",
-    marginBottom: "10px",
   },
-  inputArea: {
+  control: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -104,18 +126,18 @@ const styles = {
     width: "90%",
     maxWidth: "600px",
     padding: "10px",
-    borderRadius: "8px",
+    borderRadius: "6px",
     border: "1px solid #ccc",
     fontSize: "16px",
   },
   button: {
-    padding: "10px 20px",
-    borderRadius: "8px",
+    padding: "8px 16px",
+    borderRadius: "6px",
     border: "none",
-    backgroundColor: "#4caf50",
+    background: "#4caf50",
     color: "white",
-    fontSize: "16px",
     cursor: "pointer",
+    fontWeight: "bold",
   },
   results: {
     display: "flex",
@@ -126,7 +148,7 @@ const styles = {
   card: {
     width: "300px",
     background: "white",
-    borderRadius: "10px",
+    borderRadius: "8px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
     padding: "15px",
     overflow: "hidden",
@@ -134,8 +156,25 @@ const styles = {
   image: {
     width: "100%",
     borderRadius: "8px",
+    marginBottom: "8px",
   },
-  subheading: { fontWeight: "bold", marginTop: "10px" },
+  subheading: {
+    fontWeight: "bold",
+    marginTop: "10px",
+  },
+  nutrition: {
+    marginTop: "10px",
+    marginBottom: "10px",
+  },
+  nutritionTable: {
+    width: "100%",
+    fontSize: "14px",
+    borderCollapse: "collapse",
+  },
+  nutKey: {
+    textTransform: "capitalize",
+    color: "#555",
+  },
   error: { color: "red", textAlign: "center" },
 };
 

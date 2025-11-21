@@ -125,13 +125,25 @@ def search(q: Query):
                     print(f"Failed filter {key}: {ex}")
 
         # Ingredient filter
-        ingredients = [i.lower() for i in c.get("available_ingredients", [])]
+        ingredients_raw = c.get("available_ingredients", [])
+
+        # Ensure list
+        if not isinstance(ingredients_raw, list):
+            ingredients_raw = []
+
+        ingredients = [i.lower() for i in ingredients_raw if isinstance(i, str)]
+
         if ingredients:
             avail_set = set(ingredients)
+
             def has_any(lst):
-                joined = " ".join(lst).lower()
+                if not lst: 
+                    return False
+                joined = " ".join(map(str, lst)).lower()
                 return any(i in joined for i in avail_set)
+
             results = results[results["ingredients_list"].apply(has_any)]
+
 
         # Similarity ranking 
         vec = vectorizer.transform([q.prompt])

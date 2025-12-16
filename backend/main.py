@@ -180,7 +180,7 @@ def search(q: Query):
         print("Search error:", e)
         return {"error": str(e)}
 
-frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend/build")
+frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 if os.path.exists(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 

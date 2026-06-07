@@ -6,6 +6,7 @@ import pandas as pd
 import requests
 import pickle
 import os
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -104,3 +105,8 @@ def search_recipes(query:str,limit:int=10):
         "total_returned": len(response_results),
         "results": response_results
     }
+
+# Serve React build folder
+frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend/dist")
+if os.path.exists(frontend_dir):
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

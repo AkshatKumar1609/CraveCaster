@@ -1,7 +1,7 @@
 import { Recipe } from '@/types/recipe';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Dumbbell, Flame } from 'lucide-react';
+import { Clock, Dumbbell, Flame, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface RecipeCardProps {
@@ -10,25 +10,18 @@ interface RecipeCardProps {
   onClick?: () => void;
 }
 
-function getDifficulty(time: number): { label: string; color: string; bgColor: string } {
-  if (time <= 30) {
+function getDifficulty(timeMinutes: number): { label: string; color: string; bgColor: string } {
+  if (timeMinutes <= 30) {
     return { label: 'Easy', color: 'text-green-700', bgColor: 'bg-green-100 border-green-200' };
-  } else if (time <= 60) {
+  } else if (timeMinutes <= 60) {
     return { label: 'Medium', color: 'text-yellow-700', bgColor: 'bg-yellow-100 border-yellow-200' };
   } else {
     return { label: 'Hard', color: 'text-red-700', bgColor: 'bg-red-100 border-red-200' };
   }
 }
 
-function formatTime(minutes: number) {
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-}
-
 export function RecipeCard({ recipe, index = 0, onClick }: RecipeCardProps) {
-  const difficulty = getDifficulty(recipe.time);
+  const difficulty = getDifficulty(recipe.timeMinutes);
 
   return (
     <motion.div
@@ -59,19 +52,25 @@ export function RecipeCard({ recipe, index = 0, onClick }: RecipeCardProps) {
           
           {/* Badges */}
           <div className="absolute top-3 left-3 flex gap-2">
-            {recipe.time > 0 && (
+            {recipe.time && (
               <Badge className="bg-card/90 text-foreground backdrop-blur-sm border">
                 <Clock className="h-3 w-3 mr-1" />
-                {formatTime(recipe.time)}
+                {recipe.time}
               </Badge>
             )}
           </div>
           
           {/* Difficulty badge */}
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
             <Badge className={`${difficulty.bgColor} ${difficulty.color} border backdrop-blur-sm font-medium`}>
               {difficulty.label}
             </Badge>
+            {recipe.rating != null && (
+              <Badge className="bg-card/90 text-foreground backdrop-blur-sm border flex items-center gap-0.5">
+                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                {recipe.rating.toFixed(1)}
+              </Badge>
+            )}
           </div>
 
           {/* Hover CTA */}
@@ -88,13 +87,13 @@ export function RecipeCard({ recipe, index = 0, onClick }: RecipeCardProps) {
 
           {/* Quick nutrition stats */}
           <div className="flex gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
-            {recipe.nutrition.protein && (
+            {recipe.nutrition?.protein != null && (
               <div className="flex items-center gap-1">
                 <Dumbbell className="h-3 w-3 sm:h-4 sm:w-4 text-accent" />
-                <span>{recipe.nutrition.protein}g</span>
+                <span>{recipe.nutrition.protein}g protein</span>
               </div>
             )}
-            {recipe.nutrition.fat && (
+            {recipe.nutrition?.fat != null && (
               <div className="flex items-center gap-1">
                 <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                 <span>{recipe.nutrition.fat}g fat</span>

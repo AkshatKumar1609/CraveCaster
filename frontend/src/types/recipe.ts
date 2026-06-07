@@ -1,4 +1,12 @@
+export interface RecipeNutritionItem {
+  label: string;
+  value: string;
+  unit?: string;
+  dailyValue?: string;
+}
+
 export interface RecipeNutrition {
+  // Structured parsed nutrition from the raw string
   fat?: number;
   sat_fat?: number;
   cholesterol?: number;
@@ -9,16 +17,23 @@ export interface RecipeNutrition {
   calcium?: number;
   iron?: number;
   potassium?: number;
+  carbohydrate?: number;
+  // Raw string for display fallback
+  raw?: string;
 }
 
 export interface Recipe {
   name: string;
-  time: number;
+  time: string;           // e.g. "1 hrs 20 mins" — now a string from API
+  timeMinutes: number;    // parsed minutes for difficulty calculation
   ingredients: string[];
   directions: string[];
   image: string;
   nutrition: RecipeNutrition;
-  score: number;
+  score: number;          // match_score_percentage
+  rating?: number;
+  rank?: number;
+  cuisinePath?: string;
 }
 
 export interface SavedRecipe {

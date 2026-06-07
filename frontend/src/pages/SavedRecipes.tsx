@@ -13,10 +13,19 @@ import { motion } from 'framer-motion';
 
 // Convert SavedRecipe to Recipe type for RecipeDetailView
 function convertToRecipe(savedRecipe: SavedRecipe): Recipe {
+  const timeMinutes = savedRecipe.recipe_time || 0;
+  const formatSavedTime = (minutes: number) => {
+    if (!minutes) return '';
+    if (minutes < 60) return `${minutes} mins`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours} hrs ${mins} mins` : `${hours} hrs`;
+  };
   return {
     name: savedRecipe.recipe_name,
     image: savedRecipe.recipe_image || '',
-    time: savedRecipe.recipe_time || 0,
+    time: formatSavedTime(timeMinutes),
+    timeMinutes,
     ingredients: savedRecipe.recipe_ingredients || [],
     directions: savedRecipe.recipe_directions || [],
     nutrition: savedRecipe.recipe_nutrition || {},

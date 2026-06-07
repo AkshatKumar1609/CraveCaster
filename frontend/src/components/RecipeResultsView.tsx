@@ -11,6 +11,8 @@ interface RecipeResultsViewProps {
   onSearch: (query: string) => void;
   onBack: () => void;
   onSelectRecipe: (recipe: Recipe) => void;
+  totalReturned?: number;
+  userQuery?: string;
 }
 
 const foodIcons = [Utensils, Flame, Salad, Cookie, Soup];
@@ -149,7 +151,9 @@ export function RecipeResultsView({
   loading, 
   onSearch, 
   onBack,
-  onSelectRecipe 
+  onSelectRecipe,
+  totalReturned,
+  userQuery,
 }: RecipeResultsViewProps) {
   return (
     <div className="min-h-screen bg-background">
@@ -194,7 +198,8 @@ export function RecipeResultsView({
               className="mb-4 sm:mb-6"
             >
               <h2 className="font-serif text-xl sm:text-2xl font-bold text-foreground">
-                {recipes.length} Recipe{recipes.length !== 1 ? 's' : ''} Found
+                {totalReturned ?? recipes.length} Recipe{(totalReturned ?? recipes.length) !== 1 ? 's' : ''} Found
+                {userQuery && <span className="text-primary"> for "{userQuery}"</span>}
               </h2>
               <p className="text-sm sm:text-base text-muted-foreground">Click on a recipe to view full details</p>
             </motion.div>

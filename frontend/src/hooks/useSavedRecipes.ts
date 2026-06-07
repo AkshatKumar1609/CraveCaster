@@ -102,7 +102,7 @@ export function useSavedRecipes() {
         user_id: user.id,
         recipe_name: recipe.name,
         recipe_image: recipe.image,
-        recipe_time: recipe.time,
+        recipe_time: recipe.timeMinutes,
         recipe_ingredients: recipe.ingredients as unknown as Json,
         recipe_directions: recipe.directions as unknown as Json,
         recipe_nutrition: recipe.nutrition as unknown as Json,

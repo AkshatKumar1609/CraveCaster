@@ -15,21 +15,18 @@ interface RecipeDetailViewProps {
   onBack: () => void;
 }
 
-function getDifficulty(time: number): { label: string; color: string; bgColor: string } {
-  if (time <= 30) {
+function getDifficulty(timeMinutes: number): { label: string; color: string; bgColor: string } {
+  if (timeMinutes <= 30) {
     return { label: 'Easy', color: 'text-emerald-700 dark:text-emerald-400', bgColor: 'bg-emerald-100 dark:bg-emerald-900/50 border-emerald-300 dark:border-emerald-700' };
-  } else if (time <= 60) {
+  } else if (timeMinutes <= 60) {
     return { label: 'Medium', color: 'text-amber-700 dark:text-amber-400', bgColor: 'bg-amber-100 dark:bg-amber-900/50 border-amber-300 dark:border-amber-700' };
   } else {
     return { label: 'Hard', color: 'text-rose-700 dark:text-rose-400', bgColor: 'bg-rose-100 dark:bg-rose-900/50 border-rose-300 dark:border-rose-700' };
   }
 }
 
-function formatTime(minutes: number) {
-  if (minutes < 60) return `${minutes} Min`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+function formatTime(timeStr: string): string {
+  return timeStr || 'Unknown';
 }
 
 function capitalizeFirstLetter(text: string): string {
@@ -46,7 +43,7 @@ export function RecipeDetailView({ recipe, onBack }: RecipeDetailViewProps) {
 
   const isSaved = isRecipeSaved(recipe.name);
   const savedRecipe = savedRecipes.find(r => r.recipe_name === recipe.name);
-  const difficulty = getDifficulty(recipe.time);
+  const difficulty = getDifficulty(recipe.timeMinutes);
 
   const handleSaveToggle = async () => {
     if (!user) {
@@ -85,13 +82,20 @@ export function RecipeDetailView({ recipe, onBack }: RecipeDetailViewProps) {
   };
 
   const nutritionItems = [
-    { key: 'calories', label: 'Calories', unit: '' },
     { key: 'protein', label: 'Protein', unit: 'g' },
     { key: 'fat', label: 'Fat', unit: 'g' },
+    { key: 'carbohydrate', label: 'Carbs', unit: 'g' },
     { key: 'fiber', label: 'Fiber', unit: 'g' },
     { key: 'sugar', label: 'Sugar', unit: 'g' },
     { key: 'sodium', label: 'Sodium', unit: 'mg' },
+    { key: 'cholesterol', label: 'Cholesterol', unit: 'mg' },
+    { key: 'potassium', label: 'Potassium', unit: 'mg' },
   ];
+
+  // Has any parsed nutrition values
+  const hasStructuredNutrition = nutritionItems.some(
+    ({ key }) => recipe.nutrition[key as keyof typeof recipe.nutrition] != null
+  );
 
   return (
     <motion.div
@@ -137,7 +141,7 @@ export function RecipeDetailView({ recipe, onBack }: RecipeDetailViewProps) {
 
         {/* Badges */}
         <div className="absolute top-4 right-4 flex gap-2">
-          {recipe.time > 0 && (
+          {recipe.time && (
             <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm border border-border text-sm px-3 py-1">
               <Clock className="h-4 w-4 mr-1.5" />
               {formatTime(recipe.time)}
@@ -212,21 +216,29 @@ export function RecipeDetailView({ recipe, onBack }: RecipeDetailViewProps) {
             <Flame className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Nutrition Facts
           </h2>
-          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
-            {nutritionItems.map(({ key, label, unit }) => {
-              const value = recipe.nutrition[key as keyof typeof recipe.nutrition];
-              if (!value) return null;
-              return (
-                <div key={key} className="bg-muted/50 rounded-xl sm:rounded-2xl p-2 sm:p-4 text-center border border-border/50">
-                  <div className="text-lg sm:text-2xl font-bold text-foreground">
-                    {value}
-                    {unit && <span className="text-xs sm:text-sm font-normal text-muted-foreground ml-0.5">{unit}</span>}
+          {hasStructuredNutrition ? (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-8 gap-2 sm:gap-3">
+              {nutritionItems.map(({ key, label, unit }) => {
+                const value = recipe.nutrition[key as keyof typeof recipe.nutrition];
+                if (value == null) return null;
+                return (
+                  <div key={key} className="bg-muted/50 rounded-xl sm:rounded-2xl p-2 sm:p-4 text-center border border-border/50">
+                    <div className="text-lg sm:text-2xl font-bold text-foreground">
+                      {value}
+                      {unit && <span className="text-xs sm:text-sm font-normal text-muted-foreground ml-0.5">{unit}</span>}
+                    </div>
+                    <div className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">{label}</div>
                   </div>
-                  <div className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">{label}</div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : recipe.nutrition?.raw ? (
+            <p className="text-sm text-muted-foreground bg-muted/50 rounded-xl p-4 border border-border/50 leading-relaxed">
+              {recipe.nutrition.raw}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">No nutrition data available.</p>
+          )}
         </motion.section>
 
         {/* Ingredients */}

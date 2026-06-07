@@ -8,7 +8,7 @@ import { Recipe } from '@/types/recipe';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const Index = () => {
-  const { recipes, loading, hasSearched, searchRecipes } = useRecipeSearch();
+  const { recipes, loading, hasSearched, searchRecipes, totalReturned, userQuery } = useRecipeSearch();
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   const handleBack = () => {
@@ -44,6 +44,8 @@ const Index = () => {
                 onSearch={searchRecipes}
                 onBack={handleBack}
                 onSelectRecipe={setSelectedRecipe}
+                totalReturned={totalReturned}
+                userQuery={userQuery}
               />
             </motion.div>
           ) : (

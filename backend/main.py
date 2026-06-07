@@ -1,23 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from typing import Optional
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 import pandas as pd
-import json
-import re
-import ast
+import requests
+import pickle
 import os
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
 from dotenv import load_dotenv
-from google import genai
-
 load_dotenv()
-client = genai.Client()
 
-app = FastAPI(title="Better Recipes Finder")
+app = FastAPI(
+    title="AI Recipe Search API",
+    description="FastAPI backend utilizing semantic search vector models."
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,165 +22,85 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def safe_parse_list(val):
-    if isinstance(val, list):
-        return val
-    if pd.isna(val):
-        return []
-    try:
-        parsed = ast.literal_eval(val)
-        if isinstance(parsed, list):
-            return parsed
-    except Exception:
-        pass
-    return [v.strip() for v in str(val).split(",") if v.strip()]
+db_df = None
+db_embeddings = None
 
-# df = pd.read_csv('recipes_clean.csv')
-df = pd.read_csv('backend/recipes_clean.csv')
+HF_TOKEN = os.getenv("HF_TOKEN")
+API_URL = "https://router.huggingface.co/hf-inference/models/sentence-transformers/all-mpnet-base-v2/pipeline/feature-extraction"
 
-df["ingredients_list"] = df["ingredients_list"].apply(safe_parse_list)
-df["directions_list"] = df["directions_list"].apply(safe_parse_list)
+@app.on_event("startup")
+def startup_event():
+    global db_df, db_embeddings
+    
+    pickle_path = 'backend/recipe_embeddings.pkl'
+    if not os.path.exists(pickle_path):
+        raise FileNotFoundError(f"Critical Error: '{pickle_path}' was not found in working directory.")
+        
+    with open(pickle_path, 'rb') as f:
+        payload = pickle.load(f)
+    
+    db_df = payload['dataframe']
+    db_embeddings = payload['embeddings']
 
-numeric_cols = [
-    "total_time", "fat", "sat_fat", "cholesterol", "sodium",
-    "fiber", "sugar", "protein", "calcium", "iron", "potassium"
-]
-for col in numeric_cols:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+@app.get("/")
+def health_check():
+    return {"status": "online", "message": "Recipe Semantic Search Engine is running perfectly."}
+
+def get_query_embedding_via_api(text_query: str):
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    response = requests.post(API_URL, headers=headers, json={"inputs": text_query})
+    
+    if response.status_code == 200:
+        return np.array([response.json()])
     else:
-        df[col] = 0
+        raise Exception(f"Hugging Face API Error: {response.text}")
 
-# TF-IDF
-vectorizer = TfidfVectorizer(stop_words="english")
-X = vectorizer.fit_transform(df["text"].fillna("").values)
-
-# Gemini Ai
-def extract_constraints_google(prompt: str):
-    instruction = (
-        "Extract structured numeric recipe constraints from the user's request. "
-        "Return JSON ONLY with these possible keys: "
-        "max_time, min_protein, max_fat, max_sat_fat, max_cholesterol, max_sodium, "
-        "min_fiber, max_sugar, min_calcium, min_iron, min_potassium, "
-        "available_ingredients (list of strings). "
-        "Leave fields null if not specified. Do NOT include explanations."
-    )
-    full_prompt = f"{instruction}\nUser Prompt: {prompt}"
-
+@app.get("/search")
+def search_recipes(query:str,limit:int=10):
+    
+    if not query.strip():
+        return {"results": []}
+    
+    query_lower = query.lower()
+    
+    if "vegan" in query_lower or "vegetarian" in query_lower or "veg" in query_lower:
+        meat_keywords = 'chicken|beef|pork|meat|fish|mutton|shrimp|prawn|bacon'
+        diet_mask = ~db_df['ingredients'].str.lower().str.contains(meat_keywords, na=False)
+        filtered_df = db_df[diet_mask].reset_index(drop=True)
+        filtered_embeddings = db_embeddings[diet_mask]
+    else:
+        filtered_df = db_df.reset_index(drop=True)
+        filtered_embeddings = db_embeddings
+        
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=full_prompt
-        )
-        text = response.text.strip()
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
+        query_vector = get_query_embedding_via_api(query)
     except Exception as e:
-        print("Constraint extraction error:", e)
-
+        return {"error": "Search service temporarily overloaded.", "details": str(e)}
+    
+    scores = cosine_similarity(query_vector, filtered_embeddings).flatten()
+    
+    top_indices = np.argsort(scores)[-limit:][::-1]
+    
+    response_results = []
+    for rank, idx in enumerate(top_indices, start=1):
+        row = db_df.iloc[idx]
+        match_percentage = round(float(scores[idx]) * 100, 1)
+        
+        response_results.append({
+            "rank": rank,
+            "recipe_name": row['recipe_name'],
+            "match_score_percentage": match_percentage,
+            "total_time": row['total_time'],
+            "rating": row['rating'],
+            "cuisine_path": row['cuisine_path'],
+            "nutrition": row['nutrition'],
+            "ingredients": row['ingredients'],
+            "directions": row['directions'],
+            "img_url": row['img_src']
+        })
+        
     return {
-        "max_time": None, "min_protein": None, "max_fat": None,
-        "max_sat_fat": None, "max_cholesterol": None, "max_sodium": None,
-        "min_fiber": None, "max_sugar": None, "min_calcium": None,
-        "min_iron": None, "min_potassium": None, "available_ingredients": []
+        "user_query": query,
+        "total_returned": len(response_results),
+        "results": response_results
     }
-
-class Query(BaseModel):
-    prompt: str
-    limit: Optional[int] = 10
-
-#api
-@app.post("/search")
-def search(q: Query):
-    try:
-        c = extract_constraints_google(q.prompt)
-        results = df.copy()
-
-        ranges = {
-            "max_time": lambda v: results["total_time"] <= v,
-            "min_protein": lambda v: results["protein"] >= v,
-            "max_fat": lambda v: results["fat"] <= v,
-            "max_sat_fat": lambda v: results["sat_fat"] <= v,
-            "max_cholesterol": lambda v: results["cholesterol"] <= v,
-            "max_sodium": lambda v: results["sodium"] <= v,
-            "min_fiber": lambda v: results["fiber"] >= v,
-            "max_sugar": lambda v: results["sugar"] <= v,
-            "min_calcium": lambda v: results["calcium"] >= v,
-            "min_iron": lambda v: results["iron"] >= v,
-            "min_potassium": lambda v: results["potassium"] >= v,
-        }
-
-        for key, condition in ranges.items():
-            val = c.get(key)
-            if val is not None:
-                try:
-                    results = results[condition(float(val))]
-                except Exception as ex:
-                    print(f"Failed filter {key}: {ex}")
-
-        # Ingredient filter
-        ingredients_raw = c.get("available_ingredients", [])
-
-        # Ensure list
-        if not isinstance(ingredients_raw, list):
-            ingredients_raw = []
-
-        ingredients = [i.lower() for i in ingredients_raw if isinstance(i, str)]
-
-        if ingredients:
-            avail_set = set(ingredients)
-
-            def has_any(lst):
-                if not lst: 
-                    return False
-                joined = " ".join(map(str, lst)).lower()
-                return any(i in joined for i in avail_set)
-
-            results = results[results["ingredients_list"].apply(has_any)]
-
-
-        # Similarity ranking 
-        vec = vectorizer.transform([q.prompt])
-        sims = linear_kernel(vec, X).flatten()
-        results["_score"] = results.index.map(lambda i: float(sims[i]))
-        results = results.sort_values("_score", ascending=False)
-
-        top = results.head(q.limit or 10)
-        output = []
-        for _, r in top.iterrows():
-            output.append({
-                "name": r.get("recipe_name"),
-                "time": int(r.get("total_time", 0)),
-                "ingredients": r.get("ingredients_list", []),
-                "directions": r.get("directions_list", []),
-                "image": r.get("img_src", ""),
-                "nutrition": {
-                    "fat": r.get("fat"),
-                    "sat_fat": r.get("sat_fat"),
-                    "cholesterol": r.get("cholesterol"),
-                    "sodium": r.get("sodium"),
-                    "fiber": r.get("fiber"),
-                    "sugar": r.get("sugar"),
-                    "protein": r.get("protein"),
-                    "calcium": r.get("calcium"),
-                    "iron": r.get("iron"),
-                    "potassium": r.get("potassium"),
-                },
-                "score": float(r["_score"])
-            })
-        return output
-
-    except Exception as e:
-        print("Search error:", e)
-        return {"error": str(e)}
-
-frontend_dir = os.path.join(os.path.dirname(__file__), "../frontend/dist")
-if os.path.exists(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
-
-@app.get("/{full_path:path}")
-async def serve_react_app(full_path: str):
-    if os.path.exists(frontend_dir):
-        return FileResponse(os.path.join(frontend_dir, "index.html"))
-    return {"detail": "Frontend not found"}

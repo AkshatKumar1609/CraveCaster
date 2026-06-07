@@ -42,7 +42,7 @@ def startup_event():
     db_df = payload['dataframe']
     db_embeddings = payload['embeddings']
 
-@app.get("/")
+@app.get("/health")
 def health_check():
     return {"status": "online", "message": "Recipe Semantic Search Engine is running perfectly."}
 
